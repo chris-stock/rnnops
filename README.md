@@ -10,3 +10,4 @@ I hope to eventually include the following functionality:
 - Fixed point finding
 - Task-preserving rank reduction
 - Task-preserving synaptic balancing
+- Suite of standard RNN tasks
