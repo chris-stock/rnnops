@@ -12,15 +12,13 @@ __all__ = [
     'zeros_init',
 ]
 
-
 import numpy as np
 from copy import deepcopy
 
 
 class RNN(object):
     """
-    A container for RNN weights, biases, and nonlinearity.
-    This class is "read-only:" new set of weights gets a new instance.
+    Data type containing RNN weights, biases, and nonlinearity.
     """
 
     def __init__(
@@ -72,6 +70,13 @@ class RNN(object):
             except:
                 raise ValueError("w_rec and b are not compatible")
 
+    def __str__(self):
+        s = 'RNN object \n' + \
+            ' signature: {}\n'.format(self.signature) + \
+            ' n_rec: {}\n'.format(self.n_rec) + \
+            ' nonlinearity: {}'.format(self.nonlinearity)
+        return s
+
     @property
     def params(self):
         return self._params
@@ -120,7 +125,7 @@ def initialize_rnn(
         nonlinearity=None,
         initializers=None,
         check_dims=True,
-    ):
+):
     """
     initialize an RNN according to the parameters specified.
     """
@@ -148,9 +153,9 @@ def initialize_rnn(
     default_initializers = {}
     for k in param_shapes.keys():
         if k[0] == 'b':
-            init = zeros_init() # initialize biases at zero
+            init = zeros_init()  # initialize biases at zero
         else:
-            init = iid_gaussian_init() # initialize weights as iid gaussian
+            init = iid_gaussian_init()  # initialize weights as iid gaussian
         default_initializers[k] = init
     if initializers is None:
         initializers = {}
@@ -195,9 +200,11 @@ def iid_gaussian_init(std=1., mean=0.):
     randomly sample a matrix with iid Gaussian elements
     todo: change to use jax pseudorandomness
     """
+
     def init(shape):
         m, n = shape
-        return std*np.random.randn(*shape)/np.sqrt(n) + mean
+        return std * np.random.randn(*shape) / np.sqrt(n) + mean
+
     return init
 
 
@@ -209,9 +216,11 @@ def mvn_rows_init(mean, cov):
     cov: (n,n) symmetric PSD covariance matrix
     todo: change to use jax pseudorandomness
     """
+
     def init(shape):
         m, n = shape
         return mean + np.random.multivariate_normal(np.zeros(n), cov, m)
+
     return init
 
 
@@ -219,6 +228,8 @@ def zeros_init():
     """
     initialize a matrix with all zero elements
     """
+
     def init(shape):
         return np.zeros(shape)
+
     return init
