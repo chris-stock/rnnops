@@ -3,17 +3,24 @@ Functionality for specifying and initializing RNNs, running neural dynamics,
 and running weight dynamics of a recurrent network
 """
 __all__ = [
+    'nonlinearities',
     'RNN',
     'initialize_rnn',
     'update_rnn',
-    'nonlinearities',
     'iid_gaussian_init',
     'mvn_rows_init',
     'zeros_init',
+    'run_weight_dynamics'
 ]
-
 import numpy as np
 from copy import deepcopy
+
+
+nonlinearities = {
+    'linear': lambda x: x,
+    'relu': lambda x: np.maximum(x, 0.),
+    'tanh': lambda x: np.tanh(x),
+}
 
 
 class RNN(object):
@@ -117,6 +124,11 @@ class RNN(object):
         return self.n_in, self.n_out
 
 
+"""
+Create and update weights.
+"""
+
+
 def initialize_rnn(
         n_rec,
         signature=None,
@@ -176,23 +188,20 @@ def initialize_rnn(
 
 def update_rnn(rnn: RNN, **update_args):
     """
-    Given an existing rnn instance and new parameter values, create a new
-    rnn instance with updated parameters.
+    Given an existing RNN instance and new parameter values, create a new
+    RNN instance with updated parameters.
     rnn: instance of RNN class
     update_args: dict with new values to update
     """
-    params = deepcopy(rnn.params)
-    for k in params.keys():
-        if k in update_args.keys():
-            params[k] = update_args[k]
-    return RNN(nonlinearity=rnn.nonlinearity, **params)
-
-
-nonlinearities = {
-    'linear': lambda x: x,
-    'relu': lambda x: np.maximum(x, 0.),
-    'tanh': lambda x: np.tanh(x),
-}
+    args = deepcopy(rnn.params)
+    args.update({
+        'nonlinearity': rnn.nonlinearity
+    })
+    # for k in args.keys():
+    #     if k in update_args.keys():
+    #         args[k] = update_args[k]
+    args.update(update_args)
+    return RNN(**args)
 
 
 def iid_gaussian_init(std=1., mean=0.):
@@ -233,3 +242,32 @@ def zeros_init():
         return np.zeros(shape)
 
     return init
+
+
+"""
+Update weights according to dynamical rules.
+"""
+
+
+def run_weight_dynamics(
+        rnn,
+        update_fns,
+        update_rates,
+        dt=0.05,
+        save_weights=False,
+        tol=None,
+        t_final=None,
+):
+    """
+    Run weight dynamics using Euler-Maruyama integration.
+    rnn is the the initial condition
+    update_fns is a list of m update functions (J -> dJdt)
+    update_rates is a list of m learning rates to scale the update functions
+    dt is the step size to take with Euler-Maruyama integration
+    if save_weights is True, return a list of the trajectory taken
+    if tol is given, stop when average change in weight converges to tol
+    if t_final is given, do not run past time t_final
+    # Todo: implement this with jax.lax.scan()
+    """
+    pass
+

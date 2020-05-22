@@ -1,4 +1,2 @@
-from rnnops.tasks import Trial
-from .rnn import *
-from .dynamics import *
-
+from .weights import RNN
+from .trial import Trial

@@ -1,13 +1,18 @@
 """
+tasks.py
+Functions which produce trials of specific tasks.
+"""
+import numpy as np
+from .trial import Trial
+__all__ = [
+    'boolean_integration_task',
+    'xor_integration_task',
+]
+
+
+"""
 Boolean integration tasks. Includes context dependent integration.
 """
-__all__ = [
-    'boolean_integration_trial',
-    'xor_integration_trial',
-]
-import numpy as np
-from . import Trial
-
 XOR_conditions = [
     ((0, 0), (0,)),
     ((0, 1), (1,)),
@@ -16,7 +21,7 @@ XOR_conditions = [
 ]
 
 
-def boolean_integration_trial(
+def boolean_integration_task(
         conditions,
         num_trials: int = 1,
         trial_len: float = 1.,
@@ -71,13 +76,13 @@ def boolean_integration_trial(
     trial_args.update({
         'inputs': trial_data[0],
         'targets': trial_data[1],
-        'dt': dt,
         'trial_len': trial_len,
+        'dt': dt,
         'name': name,
     })
     return Trial(**trial_args)
 
 
-def xor_integration_trial(*args, **kwargs):
+def xor_integration_task(*args, **kwargs):
     kwargs['name'] = 'XOR_integration'
-    return boolean_integration_trial(XOR_conditions, *args, **kwargs)
+    return boolean_integration_task(XOR_conditions, *args, **kwargs)
