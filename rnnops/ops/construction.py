@@ -7,7 +7,6 @@ __all__ = [
     'construct_xor_rnn'
 ]
 import numpy as np
-from itertools import product
 from scipy.linalg import lstsq
 from rnnops.weights import nonlinearities, iid_gaussian_init, zeros_init
 from rnnops.tasks import XOR_conditions, expand_condition_inputs
