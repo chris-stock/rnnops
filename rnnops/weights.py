@@ -204,14 +204,15 @@ def update_rnn(rnn: RNN, **update_args):
     return RNN(**args)
 
 
-def iid_gaussian_init(std=1., mean=0.):
+def iid_gaussian_init(std=1., mean=0., normalize_by=None):
     """
-    randomly sample a matrix with iid Gaussian elements
+    randomly sample an ndarray with iid Gaussian elements
+    normalize_by : scale output by 1/np.sqrt(normalize_by). default: n
     todo: change to use jax pseudorandomness
     """
 
     def init(shape):
-        m, n = shape
+        n = normalize_by if normalize_by is not None else shape[0]
         return std * np.random.randn(*shape) / np.sqrt(n) + mean
 
     return init

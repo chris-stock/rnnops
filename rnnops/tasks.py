@@ -7,6 +7,7 @@ from .trial import Trial
 __all__ = [
     'boolean_integration_task',
     'xor_integration_task',
+    'expand_condition_inputs'
 ]
 
 
@@ -28,6 +29,7 @@ def boolean_integration_task(
         dt: float = 0.05,
         noise_std: float = None,
         name: float = 'boolean_integration',
+        expand_inputs: bool = False,
         **trial_args
 ):
     """
@@ -52,6 +54,9 @@ def boolean_integration_task(
     """
 
     # process conditions
+    if expand_inputs:
+        conditions = expand_condition_inputs(conditions)
+
     inputs, targets = zip(*conditions)
     if len(inputs) != len(set(inputs)):
         raise ValueError('Inputs in conditions must be unique')
@@ -61,21 +66,19 @@ def boolean_integration_task(
     time_axis = np.zeros((len(tt), 1, 1, 1))
     trial_axis = np.zeros((1, 1, 1, num_trials))
 
-    # create inputs and targets
-    trial_data = []
-    for cond in zip(*conditions):
+    def prepare_data(cond, noise=None):
         cond = np.array(cond).T  # make (n_neurons x conditions)
-        condition_axes = trial_axis + time_axis + cond[None, :, :, None]
-        if noise_std is None:
+        cond_with_axes = trial_axis + time_axis + cond[None, :, :, None]
+        if noise is None:
             noise = 0.
         else:
-            noise = dt * noise_std * np.random.randn(*condition_axes.shape)
-        trial_data.append(condition_axes + noise)
+            noise = dt * noise * np.random.randn(*cond_with_axes.shape)
+        return cond_with_axes + noise
 
     # assemble trial arguments
     trial_args.update({
-        'inputs': trial_data[0],
-        'targets': trial_data[1],
+        'inputs': prepare_data(inputs, noise_std),
+        'targets': prepare_data(targets),
         'trial_len': trial_len,
         'dt': dt,
         'name': name,
@@ -84,5 +87,27 @@ def boolean_integration_task(
 
 
 def xor_integration_task(*args, **kwargs):
-    kwargs['name'] = 'XOR_integration'
+    """
+    Generates trials of XOR function.
+    """
     return boolean_integration_task(XOR_conditions, *args, **kwargs)
+
+
+def expand_condition_inputs(conditions):
+    """
+    Given conditions, expands inputs such that for each original input i,
+    a new input of NOT i is added. This is equivalent to adding a
+    linear layer of neurons (with biases) in between the input and recurrent
+    layer.
+    """
+
+    # flip inputs
+    inputs, targets = zip(*conditions)
+    flipped_inputs = list(tuple(1 - i for i in ii) for ii in inputs)
+
+    # interleave original input and flipped inputs
+    expanded_inputs = []
+    for ii in zip(inputs, flipped_inputs):
+        expanded_inputs.append(tuple(j for jj in zip(*ii) for j in jj))
+
+    return list(zip(expanded_inputs, targets))

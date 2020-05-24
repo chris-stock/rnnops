@@ -137,9 +137,17 @@ class Trial(object):
     def n_out(self):
         return max(self.targets.shape[1], self.outputs.shape[1])
 
-    @ property
+    @property
     def n_rec(self):
         return self.hiddens.shape[1]
+
+    @property
+    def num_conditions(self):
+        return self.hiddens.shape[2]
+
+    @property
+    def num_trials(self):
+        return self.hiddens.shape[3]
 
     @property
     def signature(self):
@@ -231,7 +239,7 @@ def _calc_dxdt(
     u: array with shape (n_in, [...])
     rnn: the network configuration
     """
-    a = _adot(rnn.w_rec, rnn.phi(x)) + _adot(rnn.w_in, u)
-    b = (np.ones(
-        [1] * a.ndim) * rnn.b).T  # make sure to broadcast biases along axis 0
+    a = -x + _adot(rnn.w_rec, rnn.phi(x)) + _adot(rnn.w_in, u)
+    # make sure to broadcast biases along axis 0
+    b = (np.ones([1] * a.ndim) * rnn.b).T
     return a + b
