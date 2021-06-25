@@ -7,19 +7,61 @@ from .trial import Trial
 __all__ = [
     'boolean_integration_task',
     'xor_integration_task',
-    'expand_condition_inputs'
+    'expand_condition_variables'
 ]
 
 
 """
 Boolean integration tasks. Includes context dependent integration.
 """
-XOR_conditions = [
+
+
+XOR_CONDITIONS = [
     ((0, 0), (0,)),
     ((0, 1), (1,)),
     ((1, 0), (1,)),
     ((1, 1), (0,))
 ]
+
+
+CDI_CONDITIONS = [
+    ((0, 0, 0), (0,)),
+    ((0, 0, 1), (0,)),
+    ((0, 1, 0), (1,)),
+    ((0, 1, 1), (1,)),
+    ((1, 0, 0), (0,)),
+    ((1, 0, 1), (1,)),
+    ((1, 1, 0), (0,)),
+    ((1, 1, 1), (1,))
+]
+
+
+def task_from_functions(
+        input_function,
+        target_function,
+        trial_len: float = 1,
+        num_trials: int = 1,
+        dt: float = 0.05,
+        name: str = '',
+):
+    """
+    Construct a trial with functions of time determining inputs and targets
+    from
+    :param input_function: an n_in-valued function of time
+    :param target_function: an n_out-valued function of time
+    :param trial_args:
+    :return:
+    """
+    tt = np.arange(trial_len, step=dt)
+
+    trial_args = {
+        'trial_len': trial_len,
+        'dt': dt,
+        'name': name,
+        'inputs': np.array([input_function(t) for t in tt]),
+        'targets': np.array([target_function(t) for t in tt])
+    }
+    return Trial(**trial_args)
 
 
 def boolean_integration_task(
@@ -30,6 +72,7 @@ def boolean_integration_task(
         noise_std: float = None,
         name: float = 'boolean_integration',
         expand_inputs: bool = False,
+        expand_targets: bool = False,
         **trial_args
 ):
     """
@@ -54,8 +97,9 @@ def boolean_integration_task(
     """
 
     # process conditions
-    if expand_inputs:
-        conditions = expand_condition_inputs(conditions)
+    conditions = expand_condition_variables(
+        conditions, expand_inputs, expand_targets
+    )
 
     inputs, targets = zip(*conditions)
     if len(inputs) != len(set(inputs)):
@@ -90,10 +134,21 @@ def xor_integration_task(*args, **kwargs):
     """
     Generates trials of XOR function.
     """
-    return boolean_integration_task(XOR_conditions, *args, **kwargs)
+    return boolean_integration_task(XOR_CONDITIONS, *args, **kwargs)
 
 
-def expand_condition_inputs(conditions):
+def cdi_integration_task(*args, **kwargs):
+    """
+    Generates trials of CDI function.
+    """
+    return boolean_integration_task(XOR_CONDITIONS, *args, **kwargs)
+
+
+def expand_condition_variables(
+        conditions,
+        expand_inputs=False,
+        expand_outputs=False
+):
     """
     Given conditions, expands inputs such that for each original input i,
     a new input of NOT i is added. This is equivalent to adding a
@@ -101,13 +156,43 @@ def expand_condition_inputs(conditions):
     layer.
     """
 
-    # flip inputs
+    def expand_variable(var):
+        # interleave original input and flipped inputs
+        flipped_var = list(tuple(1 - i for i in ii) for ii in var)
+        expanded_var = []
+        for ii in zip(var, flipped_var):
+            expanded_var.append(tuple(j for jj in zip(*ii) for j in jj))
+        return expanded_var
+
     inputs, targets = zip(*conditions)
-    flipped_inputs = list(tuple(1 - i for i in ii) for ii in inputs)
+    new_inputs = expand_variable(inputs) if expand_inputs else inputs
+    new_targets = expand_variable(targets) if expand_outputs else targets
 
-    # interleave original input and flipped inputs
-    expanded_inputs = []
-    for ii in zip(inputs, flipped_inputs):
-        expanded_inputs.append(tuple(j for jj in zip(*ii) for j in jj))
+    return list(zip(new_inputs, new_targets))
 
-    return list(zip(expanded_inputs, targets))
+
+"""
+Various loss functions for Boolean outputs.
+"""
+
+
+def l2_loss(trial):
+    #  average l2 distance of network from target during trial
+    return np.mean((trial.outputs - trial.targets)**2)
+
+
+def exp_loss(trial):
+    #  exponentiated average  l2 distance of network from target
+    return np.exp(-l2_loss(trial))
+
+
+def logistic_loss(trial):
+    # logistic loss averaged over neurons
+    # clip outputs to (0,1)
+    eps = 0.01
+    outputs = np.minimum(np.maximum(trial.outputs, 0.+eps), 1.-eps)
+
+    logistic_loss = trial.targets * np.log(outputs) + \
+        (1 - trial.targets) * np.log(1 - outputs)
+
+    return np.mean(logistic_loss)

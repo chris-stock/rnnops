@@ -4,6 +4,7 @@ Methods to construct and simulate trials.
 """
 
 import numpy as np
+
 from tqdm import tqdm
 from copy import deepcopy
 from . import RNN
@@ -153,6 +154,10 @@ class Trial(object):
     def signature(self):
         return self.n_in, self.n_out
 
+    @property
+    def ndim(self):
+        return self.hiddens.ndim
+
 
 def update_trial(trial: Trial, **data):
     """
@@ -171,6 +176,30 @@ def update_trial(trial: Trial, **data):
     return Trial(**args)
 
 
+def trial_apply(
+        trial: Trial,
+        fn,
+        axis=-1,
+        keepdims=True,
+        **fn_args
+):
+    """
+    Apply a function across a trial dimension; e.g., trial averaging.
+    :param trial: a Trial instance 
+    :param fn: any function taking an axis and keepdims argument, e.g. np.mean
+    :param axis: the axis along which to apply the function; default -1
+    :param keepdims: whether to keep dims after applying fn; default True 
+    :return: a Trial 
+    """""
+    data = {k: fn(d, axis=axis, keepdims=keepdims, **fn_args) for k, d in
+            trial.data.items()}
+    return Trial(
+        trial_len=trial.trial_len,
+        dt=trial.dt,
+        name=trial.name + ' trial_apply {}'.format(fn),
+        **data
+    )
+
 def run_neural_dynamics(
         rnn: RNN,
         trial: Trial,
@@ -186,9 +215,16 @@ def run_neural_dynamics(
     update_rates: list of m learning rates to scale the update functions
     x0: initial condition of firing rates. Set to the origin by default.
     noise_std: std deviation of additive Gaussian white noise, if not None
-    # Todo: use einsum for array multiplication
     # Todo: implement this with jax.lax.scan() and jax pseudorandomness
     """
+    # check that trial and rnn are compatible
+    try:
+        assert rnn.signature == trial.signature
+    except AssertionError:
+        raise ValueError(
+            'rnn signature and trial signature do not match: {} and {}'
+            .format(rnn.signature, trial.signature))
+
     # set default value of x0 based on shape of inputs
     if x0 is None:
         x0 = np.zeros(trial.shape(n=rnn.n_rec, t=0))
@@ -202,7 +238,9 @@ def run_neural_dynamics(
             noise = 0.
         else:
             noise = noise_std * np.random.randn(*dxdt.shape)
-        x_ = x + trial.dt * (dxdt + noise)  # forward Euler update step
+        x_ = x + trial.dt * dxdt + \
+               + np.sqrt(trial.dt) * noise  # forward Euler update
+        # step
         xx.append(x_)
     xx = xx[:len(trial)]  # trim to trial length
     yy = [_adot(rnn.w_out, x) for x in xx]  # calculate network outputs
@@ -239,7 +277,12 @@ def _calc_dxdt(
     u: array with shape (n_in, [...])
     rnn: the network configuration
     """
-    a = -x + _adot(rnn.w_rec, rnn.phi(x)) + _adot(rnn.w_in, u)
-    # make sure to broadcast biases along axis 0
-    b = (np.ones([1] * a.ndim) * rnn.b).T
+    if rnn.factors['w_rec'] is not None:
+        U, V = rnn.factors['w_rec']
+        VTx = _adot(V.T, rnn.phi(x))
+        a = -x + _adot(U, VTx) + _adot(rnn.w_in, u)
+    else:
+        a = -x + _adot(rnn.w_rec, rnn.phi(x)) + _adot(rnn.w_in, u)
+    b = np.array(rnn.b, ndmin=a.ndim).T
+
     return a + b

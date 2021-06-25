@@ -4,6 +4,7 @@ and running weight dynamics of a recurrent network
 """
 __all__ = [
     'nonlinearities',
+    'nonlinearity_derivs',
     'RNN',
     'initialize_rnn',
     'update_rnn',
@@ -12,14 +13,20 @@ __all__ = [
     'zeros_init',
     'run_weight_dynamics'
 ]
+
 import numpy as np
 from copy import deepcopy
-
 
 nonlinearities = {
     'linear': lambda x: x,
     'relu': lambda x: np.maximum(x, 0.),
     'tanh': lambda x: np.tanh(x),
+}
+
+nonlinearity_derivs = {
+    'linear': lambda x: 1.,
+    'relu': lambda x: x > 0.,
+    'tanh': lambda x: 1 - np.tanh(x) ** 2,
 }
 
 
@@ -34,15 +41,42 @@ class RNN(object):
             w_rec,
             w_out,
             b,
-            nonlinearity,
-            check_dims=True,
+            nonlinearity: str,
+            rank=None,
+            check_dims: bool = True,
+            name: str = '',
     ):
+        """
+        Initialize an rnn with weights and nonlinearity.
+        w_in, w_rec, w_out, b must be castable to numpy arrays.
+        nonlinearity must be among supported nonlinearities.
+        rank is the rank of the recurrent weight matrix.
+        if check_dims is True, check that the dimensions of the weight
+        matrices agree
+        """
 
+        # if w_rec_factors is provided, make sure it agrees with w_rec
+        # U, V = w_rec_factors
+        # if w_rec is None:
+        #     try:
+        #         w_rec = U.dot(V.T)
+        #     except:
+        #         raise ValueError(
+        #             'either w_rec or w_rec_factors must be provided')
+        # elif w_rec_factors is not None and U is not None and V is not None:
+        #     try:
+        #         assert (w_rec == U.dot(V.T)).all()
+        #     except AssertionError:
+        #         raise ValueError('w_rec and w_rec_factors do not agree.')
+
+        self.name = name
         self._params = {
-            'w_in': np.array(w_in, dtype=float),
-            'w_rec': np.array(w_rec, dtype=float),
-            'w_out': np.array(w_out, dtype=float),
-            'b': np.array(b, dtype=float),
+            'w_in': w_in,
+            'w_rec': w_rec,
+            'w_out': w_out,
+            'b': b,
+            'rank': rank,
+            # 'w_rec_factors': tuple(w_rec_factors)
         }
 
         # check nonlinearity
@@ -81,7 +115,8 @@ class RNN(object):
         s = 'RNN object \n' + \
             ' signature: {}\n'.format(self.signature) + \
             ' n_rec: {}\n'.format(self.n_rec) + \
-            ' nonlinearity: {}'.format(self.nonlinearity)
+            ' nonlinearity: {}\n'.format(self.nonlinearity) + \
+            ' name: {}'.format(self.name)
         return s
 
     @property
@@ -90,19 +125,41 @@ class RNN(object):
 
     @property
     def w_in(self):
-        return self.params['w_in']
+        """
+        Exposes the input weight matrix as an ndarray.
+        """
+        return np.array(self.params['w_in'])
 
     @property
     def w_rec(self):
-        return self.params['w_rec']
+        """
+        Exposes the recurrent weight matrix as an ndarray.
+        """
+        return np.array(self.params['w_rec'])
 
     @property
     def w_out(self):
-        return self.params['w_out']
+        """
+        Exposes the output weight matrix as an ndarray.
+        """
+        return np.array(self.params['w_out'])
 
     @property
     def b(self):
-        return self.params['b']
+        """
+        Exposes the bias as an ndarray.
+        """
+        return np.array(self.params['b'])
+
+    @property
+    def rank(self):
+        """
+        Exposes the rank of the recurrent weight matrix as an int.
+        """
+        try:
+            return int(self.params['rank'])
+        except TypeError:
+            return None
 
     @property
     def n_in(self):
@@ -115,6 +172,17 @@ class RNN(object):
     @property
     def n_out(self):
         return self.w_out.shape[0]
+
+    @property
+    def factors(self):
+        fs = {}
+        for (k, w) in self.params.items():
+            try:
+                f = w.factors
+            except AttributeError:
+                f = None
+            fs[k] = f
+        return fs
 
     @property
     def signature(self):
@@ -197,9 +265,6 @@ def update_rnn(rnn: RNN, **update_args):
     args.update({
         'nonlinearity': rnn.nonlinearity
     })
-    # for k in args.keys():
-    #     if k in update_args.keys():
-    #         args[k] = update_args[k]
     args.update(update_args)
     return RNN(**args)
 
@@ -271,4 +336,3 @@ def run_weight_dynamics(
     # Todo: implement this with jax.lax.scan()
     """
     pass
-
